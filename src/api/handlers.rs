@@ -36,10 +36,13 @@ pub async fn create_video(
                 .await
                 .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?
         }
-        let id = db::insert_video(&pool, &filename, &input_path)
+        let video_id = db::insert_video(&pool, &filename, &input_path)
             .await
             .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+        db::create_job(&pool, video_id)
+            .await
+            .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+        return Ok((StatusCode::CREATED, video_id.to_string()));
     }
-
-    Ok((StatusCode::CREATED, format!("video created")))
+    Err((StatusCode::BAD_REQUEST, "No video was uploaded".to_string()))
 }
