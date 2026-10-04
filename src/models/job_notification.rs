@@ -4,4 +4,5 @@ use serde::Deserialize;
 pub struct JobNotification {
     pub id: i64,
     pub input_path: String,
+    pub original_filename: String,
 }
