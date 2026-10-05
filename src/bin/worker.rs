@@ -1,27 +1,15 @@
+use std::error::Error;
+
 use sqlx::postgres::PgListener;
-use video_queue::{models::job_notification::JobNotification, worker::process_job};
+use video_queue::{db, worker::run_worker};
 
 #[tokio::main]
-async fn main() -> Result<(), sqlx::Error> {
+async fn main() -> Result<(), Box<dyn Error>> {
     tokio::fs::create_dir_all("storage/output").await.unwrap();
     dotenvy::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").unwrap();
+    let pool = db::create_pool(&database_url).await.unwrap();
     let mut listener = PgListener::connect(&database_url).await?;
-    listener.listen("job_notif").await?;
-    loop {
-        let notification = listener.recv().await?;
-        let job: JobNotification = match serde_json::from_str(notification.payload()) {
-            Ok(job) => job,
-            Err(error) => {
-                eprintln!("notification error: {}", error);
-                continue;
-            }
-        };
-        match process_job(job).await {
-            Ok(()) => {}
-            Err(error) => {
-                eprintln!("processing job error: {}", error);
-            }
-        }
-    }
+    run_worker(&pool, listener).await?;
+    Ok(())
 }

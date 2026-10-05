@@ -1,1 +1,1 @@
-pub mod job_notification;
+pub mod job;
