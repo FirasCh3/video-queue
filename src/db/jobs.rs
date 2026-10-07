@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, Utc};
 use sqlx::PgPool;
 
 use crate::models::job::Job;

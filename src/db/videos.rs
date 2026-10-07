@@ -16,3 +16,16 @@ pub async fn insert_video(
     .await?;
     Ok(id)
 }
+
+pub async fn fetch_video_input_path(
+    job_id: i64,
+    pool: &PgPool,
+) -> Result<(String, String), sqlx::Error> {
+    let (input_path, original_filename) = sqlx::query_scalar(
+        "SELECT input_path, original_filename FROM videos vid INNER JOIN jobs j on j.video_id = vid.id WHERE j.id = $1",
+    )
+    .bind(job_id)
+    .fetch_one(pool)
+    .await?;
+    Ok((input_path, original_filename))
+}
