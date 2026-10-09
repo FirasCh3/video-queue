@@ -9,13 +9,15 @@ pub async fn create_job(pool: &PgPool, video_id: i64) -> Result<(), sqlx::Error>
         .await?;
     Ok(())
 }
-/*pub async fn fetch_pending_job(pool: &PgPool) -> Result<vec![Job], sqlx::Error> {
-    let job: vec![Job] = sqlx::query_as("SELECT * FROM jobs WHERE status = $1")
-        .bind("pending")
-        .fetch_all(pool)
+pub async fn complete_job(job_id: i64, pool: &PgPool) -> Result<(), sqlx::Error> {
+    let current_time = Utc::now().naive_utc();
+    sqlx::query("UPDATE jobs set STATUS = 'complete', completed_at = $2 where id = $1")
+        .bind(job_id)
+        .bind(current_time)
+        .execute(pool)
         .await?;
-    Ok(job)
-}*/
+    Ok(())
+}
 pub async fn claim_job(pool: &PgPool) -> Result<Option<Job>, sqlx::Error> {
     let current_time = Utc::now().naive_utc();
     let mut tx = pool.begin().await?;
@@ -30,6 +32,7 @@ pub async fn claim_job(pool: &PgPool) -> Result<Option<Job>, sqlx::Error> {
             "UPDATE jobs set status = 'in_progress', started_at = $2, lease_until = $3 WHERE id = $1",
         )
         .bind(job.id)
+        .bind(current_time)
         .bind(current_time + Duration::minutes(5))
         .execute(&mut *tx)
         .await?;

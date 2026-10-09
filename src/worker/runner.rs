@@ -3,7 +3,7 @@ use std::error::Error;
 use sqlx::{PgPool, postgres::PgListener};
 
 use crate::{
-    db::{claim_job, fetch_video_input_path},
+    db::{claim_job, complete_job, fetch_video_input_path},
     worker::process_job,
 };
 
@@ -13,7 +13,12 @@ pub async fn run_worker(pool: &PgPool, mut listener: PgListener) -> Result<(), B
             Ok(Some(job)) => match fetch_video_input_path(job.id, pool).await {
                 Ok((input_path, original_filename)) => {
                     match process_job(input_path, original_filename).await {
-                        Ok(()) => {}
+                        Ok(()) => match complete_job(job.id, pool).await {
+                            Ok(()) => (),
+                            Err(error) => {
+                                eprintln!("Updating job status to complete error: {}", error)
+                            }
+                        },
                         Err(error) => {
                             eprintln!("processing job error: {}", error);
                         }
@@ -37,7 +42,12 @@ pub async fn run_worker(pool: &PgPool, mut listener: PgListener) -> Result<(), B
             Ok(job_id) => match fetch_video_input_path(job_id, pool).await {
                 Ok((input_path, original_filename)) => {
                     match process_job(input_path, original_filename).await {
-                        Ok(()) => {}
+                        Ok(()) => match complete_job(job_id, pool).await {
+                            Ok(()) => (),
+                            Err(error) => {
+                                eprintln!("Updating job status to complete error: {}", error)
+                            }
+                        },
                         Err(error) => {
                             eprintln!("processing job error: {}", error);
                         }

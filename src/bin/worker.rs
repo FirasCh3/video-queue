@@ -9,7 +9,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     dotenvy::dotenv().ok();
     let database_url = std::env::var("DATABASE_URL").unwrap();
     let pool = db::create_pool(&database_url).await.unwrap();
-    let mut listener = PgListener::connect(&database_url).await?;
+    let listener = PgListener::connect(&database_url).await?;
     run_worker(&pool, listener).await?;
     Ok(())
 }

@@ -13,6 +13,7 @@ pub async fn process_job(
             "-vf".to_string(),
             "scale=1080:1920".to_string(),
             "storage/output/".to_string() + original_filename.as_str(),
+            "-y".to_string(),
         ])
         .output()
         .await?;
