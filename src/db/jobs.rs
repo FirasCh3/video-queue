@@ -22,14 +22,15 @@ pub async fn claim_job(pool: &PgPool) -> Result<Option<Job>, sqlx::Error> {
     let current_time = Utc::now().naive_utc();
     let mut tx = pool.begin().await?;
     let job: Option<Job> = sqlx::query_as(
-        "SELECT * FROM jobs WHERE status = 'pending' LIMIT 1 FOR UPDATE SKIP LOCKED",
+        "SELECT * FROM jobs WHERE status = 'pending' OR (status = 'in_progress' AND lease_until < $1) LIMIT 1 FOR UPDATE SKIP LOCKED",
     )
+    .bind(current_time)
     .fetch_optional(&mut *tx)
     .await?;
     match job {
         Some(job) => {
             sqlx::query(
-            "UPDATE jobs set status = 'in_progress', started_at = $2, lease_until = $3 WHERE id = $1",
+            "UPDATE jobs set status = 'in_progress', started_at = $2, lease_until = $3, attempts = attempts + 1 WHERE id = $1",
         )
         .bind(job.id)
         .bind(current_time)
@@ -41,4 +42,20 @@ pub async fn claim_job(pool: &PgPool) -> Result<Option<Job>, sqlx::Error> {
         }
         None => Ok(None),
     }
+}
+pub async fn retry_or_fail_job(pool: &PgPool, job_id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "
+            UPDATE jobs
+            SET status =
+                CASE WHEN attempts < 3 THEN 'pending'
+                ELSE 'failed'
+            END
+            WHERE id = $1
+        ",
+    )
+    .bind(job_id)
+    .execute(pool)
+    .await?;
+    Ok(())
 }

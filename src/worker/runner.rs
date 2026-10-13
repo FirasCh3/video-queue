@@ -1,9 +1,9 @@
 use std::error::Error;
 
-use sqlx::{PgPool, postgres::PgListener};
+use sqlx::{PgPool, error, postgres::PgListener};
 
 use crate::{
-    db::{claim_job, complete_job, fetch_video_input_path},
+    db::{claim_job, complete_job, fetch_video_input_path, retry_or_fail_job},
     worker::process_job,
 };
 
@@ -12,7 +12,7 @@ pub async fn run_worker(pool: &PgPool, mut listener: PgListener) -> Result<(), B
         match claim_job(pool).await {
             Ok(Some(job)) => match fetch_video_input_path(job.id, pool).await {
                 Ok((input_path, original_filename)) => {
-                    match process_job(input_path, original_filename).await {
+                    match process_job(&input_path, &original_filename).await {
                         Ok(()) => match complete_job(job.id, pool).await {
                             Ok(()) => (),
                             Err(error) => {
@@ -21,6 +21,10 @@ pub async fn run_worker(pool: &PgPool, mut listener: PgListener) -> Result<(), B
                         },
                         Err(error) => {
                             eprintln!("processing job error: {}", error);
+                            match retry_or_fail_job(pool, job.id).await {
+                                Ok(()) => {}
+                                Err(error) => {}
+                            }
                         }
                     }
                 }
@@ -41,7 +45,7 @@ pub async fn run_worker(pool: &PgPool, mut listener: PgListener) -> Result<(), B
         match serde_json::from_str(notification.payload()) {
             Ok(job_id) => match fetch_video_input_path(job_id, pool).await {
                 Ok((input_path, original_filename)) => {
-                    match process_job(input_path, original_filename).await {
+                    match process_job(&input_path, &original_filename).await {
                         Ok(()) => match complete_job(job_id, pool).await {
                             Ok(()) => (),
                             Err(error) => {
@@ -49,6 +53,10 @@ pub async fn run_worker(pool: &PgPool, mut listener: PgListener) -> Result<(), B
                             }
                         },
                         Err(error) => {
+                            match retry_or_fail_job(pool, job_id).await {
+                                Ok(()) => {}
+                                Err(error) => {}
+                            }
                             eprintln!("processing job error: {}", error);
                         }
                     }
